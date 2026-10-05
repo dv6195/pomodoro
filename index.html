@@ -31,8 +31,16 @@
   .ctl button { border:1px solid var(--track); background:transparent; color:var(--fg); padding:8px 16px; border-radius:8px; cursor:pointer; font-size:14px; }
   .ctl button.main { background:var(--accent); border-color:var(--accent); color:#fff; min-width:90px; }
   .ctl button:hover { opacity:.85; }
-  .set { margin-top:14px; font-size:12px; color:var(--muted); display:flex; gap:10px; justify-content:center; }
-  .set input { width:42px; background:transparent; color:var(--fg); border:1px solid var(--track); border-radius:4px; padding:2px 4px; text-align:center; }
+  .set { margin-top:18px; display:flex; gap:8px; justify-content:center; }
+  .card { flex:1; background:var(--track); border-radius:12px; padding:8px 4px 6px; }
+  .card label { display:block; font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .step { display:flex; align-items:center; justify-content:center; gap:2px; }
+  .step button { width:24px; height:24px; border:0; border-radius:50%; background:transparent; color:var(--muted);
+    font-size:16px; line-height:1; cursor:pointer; transition:background .15s,color .15s; padding:0; }
+  .step button:hover { background:var(--bg); color:var(--accent); }
+  .step input { width:30px; border:0; background:transparent; color:var(--fg); text-align:center;
+    font-size:15px; font-weight:600; font-family:inherit; -moz-appearance:textfield; appearance:textfield; padding:0; outline:none; }
+  .step input::-webkit-outer-spin-button, .step input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 </style>
 </head>
 <body>
@@ -55,9 +63,9 @@
     <button id="skip">건너뛰기</button>
   </div>
   <div class="set">
-    <label>집중 <input type="number" id="s-focus" min="1" max="120" value="25"></label>
-    <label>휴식 <input type="number" id="s-break" min="1" max="60" value="5"></label>
-    <label>긴 휴식 <input type="number" id="s-long" min="1" max="60" value="15"></label>
+    <div class="card"><label>집중</label><div class="step"><button data-k="focus" data-d="-1">−</button><input type="number" id="s-focus" min="1" max="120"><button data-k="focus" data-d="1">+</button></div></div>
+    <div class="card"><label>휴식</label><div class="step"><button data-k="break" data-d="-1">−</button><input type="number" id="s-break" min="1" max="60"><button data-k="break" data-d="1">+</button></div></div>
+    <div class="card"><label>긴 휴식</label><div class="step"><button data-k="long" data-d="-1">−</button><input type="number" id="s-long" min="1" max="60"><button data-k="long" data-d="1">+</button></div></div>
   </div>
 </div>
 <script>
@@ -76,6 +84,11 @@ for (const k of ['focus','break','long']) {
     try{localStorage.setItem('pomo-cfg', JSON.stringify(cfg));}catch(e){}
     if (!timer && k===mode) setMode(mode); };
 }
+document.querySelectorAll('.step button').forEach(b => b.onclick = () => {
+  const el = $('s-'+b.dataset.k);
+  el.value = Math.min(+el.max, Math.max(1, (+el.value||1) + +b.dataset.d));
+  el.onchange();
+});
 
 function fmt(s){ s=Math.max(0,Math.ceil(s)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 function render(){

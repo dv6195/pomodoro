@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro</title>
+<style>
+  :root { --bg:#ffffff; --fg:#37352f; --muted:#9b9a97; --accent:#eb5757; --track:#efeeec; }
+  body.break { --accent:#4dab9a; }
+  body.long { --accent:#529cc8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#191919; --fg:#e6e6e4; --muted:#7f7f7d; --track:#2f2f2f; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--fg); font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    display:flex; align-items:center; justify-content:center; }
+  .w { width:100%; max-width:320px; padding:16px; text-align:center; }
+  .tabs { display:flex; gap:6px; justify-content:center; margin-bottom:14px; }
+  .tabs button { border:0; background:transparent; color:var(--muted); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .tabs button.on { background:var(--track); color:var(--fg); font-weight:600; }
+  .ring { position:relative; width:220px; height:220px; margin:0 auto; }
+  svg { transform:rotate(-90deg); width:100%; height:100%; }
+  circle { fill:none; stroke-width:10; }
+  .t { stroke:var(--track); }
+  .p { stroke:var(--accent); stroke-linecap:round; transition:stroke-dashoffset .3s linear; }
+  .time { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .time b { font-size:48px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .time span { font-size:12px; color:var(--muted); margin-top:2px; }
+  .ctl { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+  .ctl button { border:1px solid var(--track); background:transparent; color:var(--fg); padding:8px 16px; border-radius:8px; cursor:pointer; font-size:14px; }
+  .ctl button.main { background:var(--accent); border-color:var(--accent); color:#fff; min-width:90px; }
+  .ctl button:hover { opacity:.85; }
+  .set { margin-top:14px; font-size:12px; color:var(--muted); display:flex; gap:10px; justify-content:center; }
+  .set input { width:42px; background:transparent; color:var(--fg); border:1px solid var(--track); border-radius:4px; padding:2px 4px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="tabs">
+    <button data-m="focus" class="on">집중</button>
+    <button data-m="break">휴식</button>
+    <button data-m="long">긴 휴식</button>
+  </div>
+  <div class="ring">
+    <svg viewBox="0 0 100 100">
+      <circle class="t" cx="50" cy="50" r="45"/>
+      <circle class="p" id="p" cx="50" cy="50" r="45"/>
+    </svg>
+    <div class="time"><b id="time">25:00</b><span id="info">완료 0회</span></div>
+  </div>
+  <div class="ctl">
+    <button class="main" id="go">시작</button>
+    <button id="reset">리셋</button>
+    <button id="skip">건너뛰기</button>
+  </div>
+  <div class="set">
+    <label>집중 <input type="number" id="s-focus" min="1" max="120" value="25"></label>
+    <label>휴식 <input type="number" id="s-break" min="1" max="60" value="5"></label>
+    <label>긴 휴식 <input type="number" id="s-long" min="1" max="60" value="15"></label>
+  </div>
+</div>
+<script>
+const C = 2*Math.PI*45;
+const $ = id => document.getElementById(id);
+const ring = $('p'); ring.style.strokeDasharray = C;
+let cfg = { focus:25, break:5, long:15 };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('pomo-cfg')||'{}')); } catch(e){}
+let mode='focus', total, end=null, left, timer=null, done=+(localStorage.getItem('pomo-done')||0);
+let day = new Date().toDateString();
+if (localStorage.getItem('pomo-day') !== day) { done=0; localStorage.setItem('pomo-day', day); }
+
+for (const k of ['focus','break','long']) {
+  const el = $('s-'+k); el.value = cfg[k];
+  el.onchange = () => { cfg[k] = Math.max(1, +el.value||cfg[k]); el.value = cfg[k];
+    try{localStorage.setItem('pomo-cfg', JSON.stringify(cfg));}catch(e){}
+    if (!timer && k===mode) setMode(mode); };
+}
+
+function fmt(s){ s=Math.max(0,Math.ceil(s)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function render(){
+  $('time').textContent = fmt(left);
+  ring.style.strokeDashoffset = C*(1-left/total);
+  $('info').textContent = '완료 '+done+'회';
+  document.title = fmt(left)+' · Pomodoro';
+}
+function setMode(m){
+  stop(); mode=m; total = left = cfg[m]*60;
+  document.body.className = m==='focus' ? '' : m;
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  $('go').textContent='시작'; render();
+}
+function tick(){
+  left = (end-Date.now())/1000;
+  if (left<=0) { left=0; render(); finish(); return; }
+  render();
+}
+function start(){ end = Date.now()+left*1000; timer=setInterval(tick,250); $('go').textContent='일시정지'; }
+function stop(){ clearInterval(timer); timer=null; $('go').textContent='시작'; }
+function beep(){
+  try { const a=new (window.AudioContext||window.webkitAudioContext)();
+    [0,.25,.5].forEach(t=>{ const o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination);
+      o.frequency.value=880; g.gain.setValueAtTime(.2,a.currentTime+t); g.gain.exponentialRampToValueAtTime(.001,a.currentTime+t+.2);
+      o.start(a.currentTime+t); o.stop(a.currentTime+t+.2); }); } catch(e){}
+}
+function finish(){
+  stop(); beep();
+  let next;
+  if (mode==='focus') { done++; try{localStorage.setItem('pomo-done',done);}catch(e){} next = done%4===0 ? 'long':'break'; }
+  else next='focus';
+  setMode(next); start();
+}
+$('go').onclick = () => timer ? (left=(end-Date.now())/1000, stop()) : start();
+$('reset').onclick = () => setMode(mode);
+$('skip').onclick = () => { const was=!!timer; setMode(mode==='focus'?'break':'focus'); if(was) start(); };
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+setMode('focus');
+</script>
+</body>
+</html>
